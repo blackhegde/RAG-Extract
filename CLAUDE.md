@@ -1,0 +1,111 @@
+# Bối cảnh project: rag-extract
+
+Đây là service xử lý tài liệu đa định dạng cho pipeline RAG (Retrieval
+Augmented Generation), tham khảo MinerU cho phần extract PDF.
+
+## Bài toán
+
+Input: nhiều loại file khác nhau — PDF (scan hoặc text-native), DOCX,
+PPTX (slide), Excel, bản vẽ thiết kế (CAD/PDF kỹ thuật).
+
+Output: dữ liệu đã chuẩn hoá về 1 schema chung (Document Node), sẵn
+sàng để chunk + embedding cho hệ thống RAG.
+
+## Kiến trúc pipeline đã chốt
+
+```
+Raw file
+  -> Preprocess tầng 1 (CHUNG mọi loại: convert format cũ, dedup, validate)
+  -> Router (phân loại theo loại file)
+  -> Preprocess tầng 2 (RIÊNG theo loại — chỉ nhánh ảnh mới cần):
+       - PDF/DOCX/Slide: detect scan vs native, nếu scan -> deskew, khử nhiễu
+       - Excel: chuẩn hoá encoding
+       - Bản vẽ: enhance ảnh, phát hiện vùng chữ viết tay
+  -> Extract (khác nhau theo nhánh):
+       - PDF/DOCX/Slide -> MinerU (layout, bảng, công thức, OCR; giữ
+         output dạng middle-json để có bbox + heading hierarchy)
+       - Excel -> đọc trực tiếp (openpyxl/pandas), giữ cấu trúc bảng,
+         KHÔNG chunk như văn bản thường; lấy giá trị đã tính thay vì
+         công thức thô
+       - Bản vẽ -> nếu có file CAD gốc (.dwg/.dxf) đọc bằng ezdxf
+         (chính xác hơn OCR); nếu chỉ có ảnh/PDF -> OCR theo vùng
+         (title block, ghi chú) + VLM sinh caption mô tả tổng quan,
+         lưu kèm ảnh gốc để hiển thị lại cho user
+  -> Chuẩn hoá (Document Node schema chung) + chunk theo semantic
+     boundary (heading/section), overlap 10-15%
+  -> Data chuẩn, sẵn sàng embedding
+```
+
+### Quyết định quan trọng cần nhớ
+
+- **PDF, DOCX, Slide dùng chung 1 nhánh extract (MinerU)** vì cùng
+  logic layout/OCR. Excel và bản vẽ tách riêng vì bản chất dữ liệu
+  khác hẳn (Excel = structured data, bản vẽ = cần OCR vùng/CAD gốc).
+- **Preprocess tách 2 tầng**: tầng 1 (trước router) chỉ làm việc
+  không cần biết loại file; tầng 2 (sau router) mới xử lý ảnh/OCR
+  đặc thù từng loại — tránh nhồi logic if/else theo loại vào 1 module.
+- Với bản vẽ: cần bước **detect chữ viết tay riêng** để route sang
+  handwriting-OCR (model khác hẳn OCR in thường), và **quality gate**
+  — nếu ảnh quá mờ sau enhance, đẩy sang human review thay vì cố OCR
+  ra kết quả sai (hậu quả sai số liệu trên bản vẽ kỹ thuật nghiêm
+  trọng hơn văn bản thường).
+
+## Kiến trúc service (đã chốt)
+
+- **1 API endpoint duy nhất**: upload file -> xử lý đồng bộ trong
+  request -> trả kết quả cuối cùng. KHÔNG lưu kết quả trung gian,
+  chỉ giữ file input trong lúc xử lý rồi xoá sạch working dir.
+- Stack: Python + FastAPI.
+- Concurrency:
+  - `REQUEST_SEMAPHORE`: giới hạn tổng số request xử lý đồng thời
+  - `GPU_SEMAPHORE`: giới hạn riêng job MinerU (GPU-bound), PHẢI
+    khớp đúng số GPU vật lý, tách biệt khỏi thread/process pool
+  - `ThreadPoolExecutor`: tác vụ I/O-bound (convert file, đọc/ghi
+    disk, gọi MinerU)
+  - `ProcessPoolExecutor`: tác vụ CPU-bound thuần Python (deskew,
+    denoise, parse Excel) — bắt buộc dùng process pool vì GIL chặn
+    thread trong trường hợp này
+
+## Trạng thái hiện tại
+
+Đã dựng xong **walking skeleton**: toàn bộ luồng request -> preprocess
+-> router -> extract -> normalize -> response chạy end-to-end, nhưng
+các hàm xử lý thật đang là STUB (trả kết quả giả). Mỗi file stub có
+docstring TODO mô tả việc cần làm.
+
+Cấu trúc:
+```
+app/main.py                    # endpoint, wiring pool/semaphore
+app/config.py                  # config qua biến môi trường
+app/pipeline/router.py         # detect_type — STUB
+app/pipeline/preprocess_common.py  # STUB, ưu tiên implement ĐẦU TIÊN
+app/pipeline/preprocess_image.py   # STUB
+app/pipeline/extract_mineru.py     # STUB
+app/pipeline/extract_excel.py      # STUB
+app/pipeline/extract_drawing.py    # STUB
+app/pipeline/normalize.py          # STUB, đã có Document Node schema mẫu
+app/utils/workdir.py           # auto-cleanup working dir mỗi request
+```
+
+## Roadmap tiếp theo (theo đúng thứ tự ưu tiên)
+
+1. ✅ API contract tối thiểu
+2. ✅ Khung stub end-to-end
+3. ⬜ Implement thật `preprocess_common`: convert .doc/.ppt cũ bằng
+   LibreOffice headless, validate file lỗi/rỗng
+4. ✅ Implement `router.detect_type`: phân biệt PDF scan vs
+   text-native, PDF bản vẽ kỹ thuật vs văn bản thường (không chỉ
+   dựa vào đuôi file — dùng magic bytes)
+5. ⬜ Implement `preprocess_image.enhance_image`: deskew, denoise,
+   phát hiện chữ viết tay, quality gate
+6. ⬜ Tích hợp MinerU thật vào `extract_mineru.run_mineru`
+7. ⬜ Implement `extract_excel` và `extract_drawing`
+8. ⬜ Hoàn thiện `normalize_and_chunk` theo schema Document Node đầy đủ
+
+## Lưu ý vận hành
+
+- `RAG_MAX_CONCURRENT_GPU_JOBS` phải khớp số GPU vật lý thật.
+- Timeout reverse proxy (nginx/traefik) cần dài hơn thời gian xử lý
+  tối đa của MinerU cho file lớn nhất dự kiến.
+- Vì không lưu kết quả trung gian, cần structured logging tại mỗi
+  stage (log ra stdout, không lưu file) để debug khi có lỗi extract.

@@ -1,0 +1,12 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+pydantic-settings>=2.2
+pymupdf>=1.24          # router: phan tich PDF (text layer, vector graphics) de detect_type
+
+# Bo sung khi implement tung stage that:
+# pillow, opencv-python-headless  # xu ly anh (deskew, denoise)
+# python-docx                  # doc DOCX
+# python-pptx                  # doc PPTX
+# openpyxl / pandas            # doc Excel
+# mineru                       # extract PDF/scan
