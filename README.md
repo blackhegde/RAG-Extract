@@ -56,8 +56,9 @@ app/
 
 1. ~~API contract tối thiểu~~ ✅
 2. ~~Khung stub end-to-end~~ ✅ (repo này)
-3. **Implement thật `preprocess_common`**: convert .doc/.ppt cũ bằng
-   LibreOffice headless, validate file lỗi/rỗng
+3. ~~Implement thật `preprocess_common`: convert .doc/.ppt cũ bằng
+   LibreOffice headless, validate file lỗi/rỗng, validate tên file rác~~ ✅
+   (nhánh convert LibreOffice chưa test được trên máy dev vì thiếu `soffice`)
 4. ~~Implement `router.detect_type` phân biệt PDF scan vs text-native,
    PDF bản vẽ kỹ thuật vs văn bản thường~~ ✅
 5. Implement `preprocess_image.enhance_image`: deskew, denoise, phát

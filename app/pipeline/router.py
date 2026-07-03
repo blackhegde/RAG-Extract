@@ -74,7 +74,11 @@ def detect_type(file_path: Path) -> FileType:
 
 
 def _detect_pdf_subtype(file_path: Path) -> FileType:
-    doc = fitz.open(file_path)
+    try:
+        doc = fitz.open(file_path)
+    except fitz.FileDataError as exc:
+        raise ValueError(f"{file_path.name}: PDF loi hoac khong doc duoc ({exc})") from exc
+
     try:
         page_count = min(len(doc), _PAGES_TO_SAMPLE)
         pages = [doc[i] for i in range(page_count)]

@@ -38,7 +38,10 @@ app = FastAPI(title="RAG Document Processing Service", lifespan=lifespan)
 async def process_document(file: UploadFile = File(...)):
     async with STATE["request_semaphore"]:
         with request_workdir() as workdir:
-            raw_path = workdir / file.filename
+            # Chi lay ten file (bo qua moi thanh phan thu muc) de tranh path
+            # traversal / ghi de file ngoai workdir qua filename do client gui
+            safe_name = Path(file.filename or "").name
+            raw_path = workdir / safe_name
             with raw_path.open("wb") as f:
                 shutil.copyfileobj(file.file, f)
 
@@ -47,9 +50,14 @@ async def process_document(file: UploadFile = File(...)):
             process_pool = STATE["process_pool"]
 
             # Preprocess tang 1 (chung, I/O-bound)
-            common_path = await loop.run_in_executor(
-                thread_pool, preprocess_common, raw_path, workdir
-            )
+            try:
+                common_path = await loop.run_in_executor(
+                    thread_pool, preprocess_common, raw_path, workdir
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except RuntimeError as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
 
             try:
                 file_type = detect_type(common_path)
