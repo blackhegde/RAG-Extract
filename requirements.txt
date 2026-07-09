@@ -2,11 +2,15 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 python-multipart>=0.0.9
 pydantic-settings>=2.2
-pymupdf>=1.24          # router: phan tich PDF (text layer, vector graphics) de detect_type
+pymupdf>=1.24                  # router: phan tich PDF (text layer, vector graphics) de detect_type
+opencv-python-headless>=4.9    # preprocess_image: deskew, denoise, handwriting heuristic, quality gate
+numpy>=1.26                    # preprocess_image: xu ly mang anh cung OpenCV/PyMuPDF
+
+# mineru[pipeline]>=3.4         # extract_mineru: CHUA cai/chay thu tren may dev - nang
+#   (tai model weight vai GB tu HuggingFace/ModelScope, nen co GPU). Code da
+#   viet theo dung API mineru.cli.common.do_parse nhung chua verify runtime that.
 
 # Bo sung khi implement tung stage that:
-# pillow, opencv-python-headless  # xu ly anh (deskew, denoise)
 # python-docx                  # doc DOCX
 # python-pptx                  # doc PPTX
 # openpyxl / pandas            # doc Excel
-# mineru                       # extract PDF/scan

@@ -61,9 +61,12 @@ app/
    (nhánh convert LibreOffice chưa test được trên máy dev vì thiếu `soffice`)
 4. ~~Implement `router.detect_type` phân biệt PDF scan vs text-native,
    PDF bản vẽ kỹ thuật vs văn bản thường~~ ✅
-5. Implement `preprocess_image.enhance_image`: deskew, denoise, phát
-   hiện chữ viết tay, quality gate cho bản vẽ
-6. Tích hợp MinerU thật vào `extract_mineru.run_mineru`
+5. ~~Implement `preprocess_image.enhance_image`: deskew, denoise, phát
+   hiện chữ viết tay, quality gate cho bản vẽ~~ ✅ (phát hiện chữ viết
+   tay dùng heuristic tạm thời, chưa phải model thật — xem CLAUDE.md)
+6. ~~Tích hợp MinerU thật vào `extract_mineru.run_mineru`~~ ✅ (code đã
+   gọi đúng API `mineru.cli.common.do_parse`, nhưng package `mineru`
+   chưa cài/chạy thử được trên máy dev)
 7. Implement `extract_excel` (openpyxl/pandas) và `extract_drawing`
    (ezdxf cho CAD gốc, OCR theo vùng + VLM cho ảnh)
 8. Hoàn thiện `normalize_and_chunk` theo schema Document Node đầy đủ

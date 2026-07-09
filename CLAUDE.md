@@ -66,6 +66,23 @@ Raw file
     denoise, parse Excel) — bắt buộc dùng process pool vì GIL chặn
     thread trong trường hợp này
 
+### Ngoại lệ có chủ đích: human review cho quality gate
+
+Nhánh ảnh (`preprocess_image`) có quality gate — nếu ảnh quá mờ sau
+enhance, KHÔNG cố OCR ra kết quả sai mà cần đẩy sang human review. Vì
+kiến trúc chính không lưu kết quả trung gian, đây là **ngoại lệ có chủ
+đích** cho riêng nhánh này:
+
+- File gốc bị flag được lưu vào `RAG_REVIEW_ROOT` (thư mục riêng, KHÔNG
+  bị auto-cleanup như working dir mỗi request) kèm `metadata.json`
+  (lý do, quality_score, has_handwriting).
+- Response trả về `needs_review=true`, `review_id`, `review_path` —
+  KHÔNG trả node đã extract cho nhánh này.
+- Service hiện tại chỉ có trách nhiệm lưu + trả đường dẫn. Một service
+  nhập liệu/review RIÊNG (ngoài repo này) sẽ đọc file qua review_path
+  và gửi lại kết quả đã điền bổ sung — chưa cần thêm endpoint GET/POST
+  review trong service này.
+
 ## Trạng thái hiện tại
 
 Đã dựng xong **walking skeleton**: toàn bộ luồng request -> preprocess
@@ -98,9 +115,40 @@ app/utils/workdir.py           # auto-cleanup working dir mỗi request
 4. ✅ Implement `router.detect_type`: phân biệt PDF scan vs
    text-native, PDF bản vẽ kỹ thuật vs văn bản thường (không chỉ
    dựa vào đuôi file — dùng magic bytes)
-5. ⬜ Implement `preprocess_image.enhance_image`: deskew, denoise,
-   phát hiện chữ viết tay, quality gate
-6. ⬜ Tích hợp MinerU thật vào `extract_mineru.run_mineru`
+5. ✅ Implement `preprocess_image.enhance_image`: deskew (minAreaRect +
+   warpAffine), denoise (fastNlMeansDenoising), quality gate (variance
+   Laplacian). Phát hiện chữ viết tay dùng **heuristic tạm thời** (CV của
+   fill-ratio/chiều cao connected component) — đã test với Helvetica vs 4
+   font kiểu viết tay trên macOS: không false positive trên mẫu in, nhưng
+   bỏ sót ~2/4 kiểu chữ viết tay có nét đều (recall thấp). Cần thay bằng
+   model classification thật trước khi dùng production.
+6. ✅ Tích hợp `extract_mineru.run_mineru` với `mineru.cli.common.do_parse`,
+   ĐÃ TEST THẬT với file PDF scan thật 20 trang trên máy dev (Apple M2,
+   8GB unified memory, cài `mineru[core,mlx]`). Kết quả quan trọng cần nhớ:
+   - **Backend mặc định: `pipeline`** (OCR/layout cổ điển, không VLM) —
+     chạy ổn định, không crash, đã verify full 20 trang.
+   - **`hybrid-engine`/`vlm-engine` (VLM) cho dấu tiếng Việt ĐÚNG HƠN
+     NHIỀU** (vd ra đúng "Hợp Đồng", "Độc lập - Tự do - Hạnh phúc" thay vì
+     bị rụng dấu) vì không bị giới hạn bởi dict ký tự cố định như pipeline.
+     NHƯNG đã test thật và bị **crash tiến trình** (native crash, không
+     bắt được bằng try/except Python) do memory leak thật trong `mlx-vlm`
+     — Metal báo "Insufficient Memory" sau ~16-82 lần gọi predict liên
+     tiếp (không liên quan batch/window size, xảy ra ở cả hybrid lẫn
+     vlm-engine, chỉ khác số lần predict trước khi crash). Trên
+     Linux+CUDA (production dự kiến), MinerU KHÔNG dùng engine "mlx" mà
+     chọn vllm/lmdeploy/transformers (nhánh code khác hẳn) — lỗi này CÓ
+     THỂ không xảy ra ở đó, nhưng **CẦN VERIFY THẬT trên máy GPU thật**
+     trước khi bật hybrid/vlm-engine cho production.
+   - **`mineru_lang="latin"` KHÔNG có tác dụng sửa dấu tiếng Việt** cho
+     backend `pipeline` như ghi chú cũ ở đây từng kỳ vọng — đã kiểm tra
+     trực tiếp `models_config.yml` của MinerU 3.4.x: "latin" chỉ là alias
+     trỏ thẳng về model "ch" (`ch_PP-OCRv6_small_rec_infer`), và dict của
+     model "ch" (`ppocrv6_dict.txt`) THIẾU các ký tự dấu ghép tiếng Việt
+     (vd "ộ","ờ","ấ","ợ","ạ" đều MISSING dù có "ơ","ư","ă","â","đ"). Model
+     `latin_PP-OCRv5_rec_infer` xuất hiện trong `arch_config.yaml` nhưng
+     CHƯA có dict + weight cục bộ đi kèm — không dùng được ngay. Đã đổi
+     `mineru_lang` về `"ch"` cho khớp thực tế (giá trị "latin" gây hiểu
+     nhầm sai vì không có model latin thật đứng sau nó).
 7. ⬜ Implement `extract_excel` và `extract_drawing`
 8. ⬜ Hoàn thiện `normalize_and_chunk` theo schema Document Node đầy đủ
 

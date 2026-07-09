@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -f /tmp/test_result2.json)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:8130/v1/process -F \"file=@/Volumes/DATA/MIK/test.pdf\" -o /tmp/test_result2.json --max-time 1800)",
+      "Bash(rm -f /tmp/test_result3.json)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:8130/v1/process -F \"file=@/Volumes/DATA/MIK/test.pdf\" -o /tmp/test_result3.json --max-time 1800)",
+      "Read(//Volumes/**)",
+      "Bash(diskutil list *)",
+      "Read(//Volumes/DATA/**)",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(rm -f /tmp/test_result_final.json)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:8130/v1/process -F \"file=@/Volumes/DATA/MIK/test.pdf\" -o /tmp/test_result_final.json --max-time 1800)",
+      "Bash(python3 -c ' *)",
+      "Read(//Users/kyanhazt/.cache/huggingface/**)",
+      "Bash(rm -f /tmp/test_vlm_2p.json)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:8130/v1/process -F \"file=@/tmp/test_2pages.pdf\" -o /tmp/test_vlm_2p.json --max-time 300)",
+      "Bash(rm -f /tmp/test_vlm_full.json)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:8130/v1/process -F \"file=@/Volumes/DATA/MIK/test.pdf\" -o /tmp/test_vlm_full.json --max-time 1800)"
+    ]
+  }
+}
